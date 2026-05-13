@@ -73,13 +73,19 @@
     <button class="btn secondary" id="clear">Clear</button>
   </div>
 
-  <div class="field">
-    <label for="pageHandle">Real page handle <span style="text-transform:none">(optional — for unassigned templates)</span></label>
-    <input id="pageHandle" type="text" placeholder="about-us">
+  <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div>
+      <label for="pageHandle">Real page handle <span style="text-transform:none">(optional)</span></label>
+      <input id="pageHandle" type="text" placeholder="about-us">
+    </div>
+    <div>
+      <label for="templateName">Template name <span style="text-transform:none">(auto-detected)</span></label>
+      <input id="templateName" type="text" placeholder="custom-landing">
+    </div>
   </div>
 
   <div class="hint">
-    <b>Unassigned templates:</b> if you're previewing a <code>page.something</code> template that isn't attached to a live page yet, Shopify needs a real page to render against. The cleanest source is the theme editor's <b>Share preview</b> button — it bakes the correct path in. Otherwise, enter a real page handle above (e.g. <code>about-us</code>) and we'll build a second URL using <code>?view=&lt;template&gt;</code>.
+    <b>Unassigned templates:</b> if you're previewing a <code>page.something</code> template that isn't attached to a live page yet, Shopify needs a real page to render against. Fill in both fields above to build a URL like <code>/pages/&lt;handle&gt;?view=&lt;template&gt;&amp;preview_theme_id=…</code>. The template name auto-fills if the source URL's <code>previewPath</code> already includes a <code>view=</code> param.
   </div>
 
   <div id="error" class="err" hidden></div>
@@ -141,11 +147,16 @@
     return `https://${store}.myshopify.com${pathOnly}?${params.toString()}`;
   }
 
-  function buildOverride({ store, themeId, view }, handle) {
+  function buildOverride({ store, themeId }, handle, template) {
     const cleanHandle = handle.trim().replace(/^\/+|\/+$/g, "").replace(/^pages\//, "");
-    if (!cleanHandle || !view) return null;
-    const params = new URLSearchParams({ view, preview_theme_id: themeId });
-    return { url: `https://${store}.myshopify.com/pages/${cleanHandle}?${params.toString()}`, handle: cleanHandle };
+    const cleanTemplate = template.trim().replace(/^page\./, "").replace(/\.liquid$/, "");
+    if (!cleanHandle || !cleanTemplate) return null;
+    const params = new URLSearchParams({ view: cleanTemplate, preview_theme_id: themeId });
+    return {
+      url: `https://${store}.myshopify.com/pages/${cleanHandle}?${params.toString()}`,
+      handle: cleanHandle,
+      template: cleanTemplate,
+    };
   }
 
   function setUrl(el, url) {
@@ -169,10 +180,14 @@
       $("mPath").textContent = parsed.previewPath;
       $("mView").textContent = parsed.view || "—";
 
-      const override = buildOverride(parsed, $("pageHandle").value);
+      if (parsed.view && !$("templateName").value.trim()) {
+        $("templateName").value = parsed.view;
+      }
+
+      const override = buildOverride(parsed, $("pageHandle").value, $("templateName").value);
       if (override) {
         setUrl($("altUrl"), override.url);
-        $("altTemplate").textContent = parsed.view;
+        $("altTemplate").textContent = override.template;
         $("altHandle").textContent = override.handle;
         $("altCard").hidden = false;
       } else {
@@ -228,8 +243,10 @@
     });
   });
 
-  $("pageHandle").addEventListener("input", () => {
-    if ($("src").value.trim()) run();
+  ["pageHandle", "templateName"].forEach(id => {
+    $(id).addEventListener("input", () => {
+      if ($("src").value.trim()) run();
+    });
   });
 
   $("src").focus();
