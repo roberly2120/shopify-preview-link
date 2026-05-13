@@ -79,13 +79,13 @@
       <input id="pageHandle" type="text" placeholder="about-us">
     </div>
     <div>
-      <label for="templateName">Template name <span style="text-transform:none">(auto-detected)</span></label>
-      <input id="templateName" type="text" placeholder="custom-landing">
+      <label for="templateName">Template name <span style="text-transform:none">(optional)</span></label>
+      <input id="templateName" type="text" placeholder="high-protein-rotation">
     </div>
   </div>
 
   <div class="hint">
-    <b>Unassigned templates:</b> if you're previewing a <code>page.something</code> template that isn't attached to a live page yet, Shopify needs a real page to render against. Fill in both fields above to build a URL like <code>/pages/&lt;handle&gt;?view=&lt;template&gt;&amp;preview_theme_id=…</code>. The template name auto-fills if the source URL's <code>previewPath</code> already includes a <code>view=</code> param.
+    <b>Unassigned templates:</b> if you're previewing a <code>page.something</code> template that isn't attached to a live page yet, Shopify needs a real page to render against. Fill in both fields above — a <b>real live page handle</b> (e.g. <code>about-us</code>) and the <b>template name</b> (e.g. <code>high-protein-rotation</code>, without <code>page.</code> or <code>.liquid</code>) — to build a URL like <code>/pages/about-us?view=high-protein-rotation&amp;preview_theme_id=…</code>.
   </div>
 
   <div id="error" class="err" hidden></div>
@@ -108,7 +108,6 @@
       <div>Store handle</div><span id="mStore"></span>
       <div>Theme ID</div><span id="mTheme"></span>
       <div>Preview path</div><span id="mPath"></span>
-      <div>Template (view)</div><span id="mView"></span>
     </div>
   </div>
 </div>
@@ -134,10 +133,7 @@
     let previewPath = u.searchParams.get("previewPath") || "/";
     if (!previewPath.startsWith("/")) previewPath = "/" + previewPath;
 
-    const [, queryStr] = previewPath.split("?");
-    const view = new URLSearchParams(queryStr || "").get("view") || "";
-
-    return { store, themeId, previewPath, view };
+    return { store, themeId, previewPath };
   }
 
   function build({ store, themeId, previewPath }) {
@@ -178,11 +174,6 @@
       $("mStore").textContent = parsed.store;
       $("mTheme").textContent = parsed.themeId;
       $("mPath").textContent = parsed.previewPath;
-      $("mView").textContent = parsed.view || "—";
-
-      if (parsed.view && !$("templateName").value.trim()) {
-        $("templateName").value = parsed.view;
-      }
 
       const override = buildOverride(parsed, $("pageHandle").value, $("templateName").value);
       if (override) {
