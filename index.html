@@ -54,6 +54,10 @@
     font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none;
   }
   .toast.show { opacity: 1; }
+  .hint { background: var(--panel-2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 12px; margin-top: 16px; font-size: 12px; color: var(--muted); }
+  .hint b { color: var(--text); }
+  .hint code { background: var(--bg); padding: 1px 5px; border-radius: 3px; color: #cde7a6; }
+  .field { margin-top: 16px; }
 </style>
 </head>
 <body>
@@ -69,19 +73,36 @@
     <button class="btn secondary" id="clear">Clear</button>
   </div>
 
+  <div class="field">
+    <label for="pageHandle">Real page handle <span style="text-transform:none">(optional — for unassigned templates)</span></label>
+    <input id="pageHandle" type="text" placeholder="about-us">
+  </div>
+
+  <div class="hint">
+    <b>Unassigned templates:</b> if you're previewing a <code>page.something</code> template that isn't attached to a live page yet, Shopify needs a real page to render against. The cleanest source is the theme editor's <b>Share preview</b> button — it bakes the correct path in. Otherwise, enter a real page handle above (e.g. <code>about-us</code>) and we'll build a second URL using <code>?view=&lt;template&gt;</code>.
+  </div>
+
   <div id="error" class="err" hidden></div>
   <div id="output" class="out" hidden>
     <div class="card">
       <div class="lbl">
         <span>Preview link</span>
-        <button class="btn secondary" data-copy>Copy</button>
+        <button class="btn secondary" data-copy="previewUrl">Copy</button>
       </div>
       <div class="url"><a id="previewUrl" target="_blank" rel="noopener"></a></div>
+    </div>
+    <div class="card" id="altCard" hidden>
+      <div class="lbl">
+        <span>Override link (via <code id="altTemplate"></code> on <code id="altHandle"></code>)</span>
+        <button class="btn secondary" data-copy="altUrl">Copy</button>
+      </div>
+      <div class="url"><a id="altUrl" target="_blank" rel="noopener"></a></div>
     </div>
     <div class="meta">
       <div>Store handle</div><span id="mStore"></span>
       <div>Theme ID</div><span id="mTheme"></span>
       <div>Preview path</div><span id="mPath"></span>
+      <div>Template (view)</div><span id="mView"></span>
     </div>
   </div>
 </div>
@@ -107,7 +128,10 @@
     let previewPath = u.searchParams.get("previewPath") || "/";
     if (!previewPath.startsWith("/")) previewPath = "/" + previewPath;
 
-    return { store, themeId, previewPath };
+    const [, queryStr] = previewPath.split("?");
+    const view = new URLSearchParams(queryStr || "").get("view") || "";
+
+    return { store, themeId, previewPath, view };
   }
 
   function build({ store, themeId, previewPath }) {
@@ -115,6 +139,13 @@
     const params = new URLSearchParams(queryStr || "");
     params.set("preview_theme_id", themeId);
     return `https://${store}.myshopify.com${pathOnly}?${params.toString()}`;
+  }
+
+  function buildOverride({ store, themeId, view }, handle) {
+    const cleanHandle = handle.trim().replace(/^\/+|\/+$/g, "").replace(/^pages\//, "");
+    if (!cleanHandle || !view) return null;
+    const params = new URLSearchParams({ view, preview_theme_id: themeId });
+    return { url: `https://${store}.myshopify.com/pages/${cleanHandle}?${params.toString()}`, handle: cleanHandle };
   }
 
   function setUrl(el, url) {
@@ -136,6 +167,18 @@
       $("mStore").textContent = parsed.store;
       $("mTheme").textContent = parsed.themeId;
       $("mPath").textContent = parsed.previewPath;
+      $("mView").textContent = parsed.view || "—";
+
+      const override = buildOverride(parsed, $("pageHandle").value);
+      if (override) {
+        setUrl($("altUrl"), override.url);
+        $("altTemplate").textContent = parsed.view;
+        $("altHandle").textContent = override.handle;
+        $("altCard").hidden = false;
+      } else {
+        $("altCard").hidden = true;
+      }
+
       $("output").hidden = false;
     } catch (e) {
       showError(e.message);
@@ -175,7 +218,7 @@
 
   document.querySelectorAll("[data-copy]").forEach(btn => {
     btn.addEventListener("click", async () => {
-      const url = $("previewUrl").textContent;
+      const url = $(btn.dataset.copy).textContent;
       try {
         await navigator.clipboard.writeText(url);
         toast("Copied");
@@ -183,6 +226,10 @@
         toast("Copy failed");
       }
     });
+  });
+
+  $("pageHandle").addEventListener("input", () => {
+    if ($("src").value.trim()) run();
   });
 
   $("src").focus();
