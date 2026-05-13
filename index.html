@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shopify Preview Link Builder</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f232c;
+    --text: #e6e8ee;
+    --muted: #8a93a6;
+    --accent: #95bf47;
+    --accent-2: #5e8e2e;
+    --err: #ff6b6b;
+    --border: #262b36;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .wrap { max-width: 880px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 24px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  textarea, input[type=text] {
+    width: 100%; background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    resize: vertical;
+  }
+  textarea { min-height: 90px; }
+  textarea:focus, input:focus { outline: none; border-color: var(--accent-2); }
+  .row { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  .row .grow { flex: 1; }
+  .btn {
+    background: var(--accent); color: #0f1115; border: 0; border-radius: 8px;
+    padding: 8px 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn:hover { background: #a8cf5d; }
+  .btn.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .btn.secondary:hover { background: #2a2f3a; }
+  .out { margin-top: 24px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .card .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+  .url { word-break: break-all; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #cde7a6; }
+  .url a { color: inherit; text-decoration: none; }
+  .url a:hover { text-decoration: underline; }
+  .err { color: var(--err); margin-top: 10px; font-size: 13px; }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .meta span { color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: #0f1115; padding: 8px 14px; border-radius: 8px;
+    font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Shopify Preview Link Builder</h1>
+  <p class="sub">Paste a theme-editor URL → get a clean preview link for PMs.</p>
+
+  <label for="src">Theme editor URL</label>
+  <textarea id="src" placeholder="https://admin.shopify.com/store/&lt;store&gt;/themes/&lt;id&gt;/editor?previewPath=..."></textarea>
+  <div class="row">
+    <button class="btn" id="build">Build link</button>
+    <button class="btn secondary" id="paste">Paste from clipboard</button>
+    <button class="btn secondary" id="clear">Clear</button>
+  </div>
+
+  <div id="error" class="err" hidden></div>
+  <div id="output" class="out" hidden>
+    <div class="card">
+      <div class="lbl">
+        <span>Preview link</span>
+        <button class="btn secondary" data-copy>Copy</button>
+      </div>
+      <div class="url"><a id="previewUrl" target="_blank" rel="noopener"></a></div>
+    </div>
+    <div class="meta">
+      <div>Store handle</div><span id="mStore"></span>
+      <div>Theme ID</div><span id="mTheme"></span>
+      <div>Preview path</div><span id="mPath"></span>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast">Copied</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function parse(url) {
+    let u;
+    try { u = new URL(url.trim()); }
+    catch { throw new Error("That doesn't look like a URL."); }
+
+    if (!/admin\.shopify\.com$/i.test(u.hostname)) {
+      throw new Error("Expected an admin.shopify.com URL.");
+    }
+    const m = u.pathname.match(/^\/store\/([^/]+)\/themes\/(\d+)\/editor\/?$/);
+    if (!m) throw new Error("Couldn't find /store/<handle>/themes/<id>/editor in the path.");
+
+    const store = m[1];
+    const themeId = m[2];
+    let previewPath = u.searchParams.get("previewPath") || "/";
+    if (!previewPath.startsWith("/")) previewPath = "/" + previewPath;
+
+    return { store, themeId, previewPath };
+  }
+
+  function build({ store, themeId, previewPath }) {
+    const [pathOnly, queryStr] = previewPath.split("?");
+    const params = new URLSearchParams(queryStr || "");
+    params.set("preview_theme_id", themeId);
+    return `https://${store}.myshopify.com${pathOnly}?${params.toString()}`;
+  }
+
+  function setUrl(el, url) {
+    el.textContent = url;
+    el.href = url;
+  }
+
+  function showError(msg) {
+    $("error").hidden = false;
+    $("error").textContent = msg;
+    $("output").hidden = true;
+  }
+
+  function run() {
+    $("error").hidden = true;
+    try {
+      const parsed = parse($("src").value);
+      setUrl($("previewUrl"), build(parsed));
+      $("mStore").textContent = parsed.store;
+      $("mTheme").textContent = parsed.themeId;
+      $("mPath").textContent = parsed.previewPath;
+      $("output").hidden = false;
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+
+  function toast(msg) {
+    const t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => t.classList.remove("show"), 1200);
+  }
+
+  $("build").addEventListener("click", run);
+  $("src").addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run();
+  });
+  $("src").addEventListener("paste", () => setTimeout(run, 0));
+
+  $("paste").addEventListener("click", async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      $("src").value = text;
+      run();
+    } catch {
+      showError("Clipboard read blocked — paste manually (Ctrl+V).");
+    }
+  });
+
+  $("clear").addEventListener("click", () => {
+    $("src").value = "";
+    $("output").hidden = true;
+    $("error").hidden = true;
+    $("src").focus();
+  });
+
+  document.querySelectorAll("[data-copy]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const url = $("previewUrl").textContent;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast("Copied");
+      } catch {
+        toast("Copy failed");
+      }
+    });
+  });
+
+  $("src").focus();
+</script>
+</body>
+</html>
