@@ -93,21 +93,15 @@
     <div class="card">
       <div class="lbl">
         <span>Preview link</span>
-        <button class="btn secondary" data-copy="previewUrl">Copy</button>
+        <button class="btn secondary" data-copy>Copy</button>
       </div>
       <div class="url"><a id="previewUrl" target="_blank" rel="noopener"></a></div>
-    </div>
-    <div class="card" id="altCard" hidden>
-      <div class="lbl">
-        <span>Override link (via <code id="altTemplate"></code> on <code id="altHandle"></code>)</span>
-        <button class="btn secondary" data-copy="altUrl">Copy</button>
-      </div>
-      <div class="url"><a id="altUrl" target="_blank" rel="noopener"></a></div>
     </div>
     <div class="meta">
       <div>Store handle</div><span id="mStore"></span>
       <div>Theme ID</div><span id="mTheme"></span>
       <div>Preview path</div><span id="mPath"></span>
+      <div>Mode</div><span id="mMode"></span>
     </div>
   </div>
 </div>
@@ -148,11 +142,7 @@
     const cleanTemplate = template.trim().replace(/^page\./, "").replace(/\.liquid$/, "");
     if (!cleanHandle || !cleanTemplate) return null;
     const params = new URLSearchParams({ view: cleanTemplate, preview_theme_id: themeId });
-    return {
-      url: `https://${store}.myshopify.com/pages/${cleanHandle}?${params.toString()}`,
-      handle: cleanHandle,
-      template: cleanTemplate,
-    };
+    return `https://${store}.myshopify.com/pages/${cleanHandle}?${params.toString()}`;
   }
 
   function setUrl(el, url) {
@@ -170,21 +160,13 @@
     $("error").hidden = true;
     try {
       const parsed = parse($("src").value);
-      setUrl($("previewUrl"), build(parsed));
+      const override = buildOverride(parsed, $("pageHandle").value, $("templateName").value);
+      const url = override || build(parsed);
+      setUrl($("previewUrl"), url);
       $("mStore").textContent = parsed.store;
       $("mTheme").textContent = parsed.themeId;
       $("mPath").textContent = parsed.previewPath;
-
-      const override = buildOverride(parsed, $("pageHandle").value, $("templateName").value);
-      if (override) {
-        setUrl($("altUrl"), override.url);
-        $("altTemplate").textContent = override.template;
-        $("altHandle").textContent = override.handle;
-        $("altCard").hidden = false;
-      } else {
-        $("altCard").hidden = true;
-      }
-
+      $("mMode").textContent = override ? "template override" : "from previewPath";
       $("output").hidden = false;
     } catch (e) {
       showError(e.message);
@@ -224,7 +206,7 @@
 
   document.querySelectorAll("[data-copy]").forEach(btn => {
     btn.addEventListener("click", async () => {
-      const url = $(btn.dataset.copy).textContent;
+      const url = $("previewUrl").textContent;
       try {
         await navigator.clipboard.writeText(url);
         toast("Copied");
