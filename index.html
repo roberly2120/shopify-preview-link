@@ -57,6 +57,12 @@
   .hint { background: var(--panel-2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 12px; margin-top: 16px; font-size: 12px; color: var(--muted); }
   .hint b { color: var(--text); }
   .hint code { background: var(--bg); padding: 1px 5px; border-radius: 3px; color: #cde7a6; }
+  .hint-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .hint-toggle { display: inline-flex; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px; }
+  .hint-tab { background: transparent; color: var(--muted); border: 0; border-radius: 4px; padding: 3px 9px; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .hint-tab.active { background: var(--accent); color: #0f1115; }
+  .hint-body ul { margin: 8px 0 0; padding-left: 18px; }
+  .hint-body li { margin-bottom: 4px; }
   .field { margin-top: 16px; }
 </style>
 </head>
@@ -68,7 +74,6 @@
   <label for="src">Theme editor URL</label>
   <textarea id="src" placeholder="https://admin.shopify.com/store/&lt;store&gt;/themes/&lt;id&gt;/editor?previewPath=..."></textarea>
   <div class="row">
-    <button class="btn" id="build">Build link</button>
     <button class="btn secondary" id="paste">Paste from clipboard</button>
     <button class="btn secondary" id="clear">Clear</button>
   </div>
@@ -85,7 +90,26 @@
   </div>
 
   <div class="hint">
-    <b>Unassigned templates:</b> if you're previewing a <code>page.something</code> template that isn't attached to a live page yet, Shopify needs a real page to render against. Fill in both fields above — a <b>real live page handle</b> (e.g. <code>about-us</code>) and the <b>template name</b> (e.g. <code>high-protein-rotation</code>, without <code>page.</code> or <code>.liquid</code>) — to build a URL like <code>/pages/about-us?view=high-protein-rotation&amp;preview_theme_id=…</code>.
+    <div class="hint-head">
+      <b>Unassigned templates</b>
+      <div class="hint-toggle" role="tablist">
+        <button type="button" class="hint-tab active" data-view="simple">Simple</button>
+        <button type="button" class="hint-tab" data-view="tech">Technical</button>
+      </div>
+    </div>
+
+    <div class="hint-body" data-body="simple">
+      Trying to preview a page layout that hasn't been put on the site yet? Sometimes a new page design (a <b>template</b>) is built before anyone has created an actual page for it. To see it, the preview needs to borrow an existing live page to display the new design on. Fill in <b>both</b> boxes above:
+      <ul>
+        <li><b>Real page handle</b> — the address of any page that's already live on the store (the bit after <code>/pages/</code>, e.g. <code>about-us</code>).</li>
+        <li><b>Template name</b> — the name of the new design you want to preview, exactly as the developer wrote it (e.g. <code>high-protein-rotation</code>).</li>
+      </ul>
+      The link builds itself as you type — just copy it and share. This only changes what <i>you</i> see in the preview — nothing on the live site is affected.
+    </div>
+
+    <div class="hint-body" data-body="tech" hidden>
+      If you're previewing a <code>page.something</code> template that isn't attached to a live page yet, Shopify needs a real page to render against. Fill in both fields above — a <b>real live page handle</b> (e.g. <code>about-us</code>) and the <b>template name</b> (e.g. <code>high-protein-rotation</code>, without <code>page.</code> or <code>.liquid</code>) — to build a URL like <code>/pages/about-us?view=high-protein-rotation&amp;preview_theme_id=…</code>.
+    </div>
   </div>
 
   <div id="error" class="err" hidden></div>
@@ -110,6 +134,14 @@
 
 <script>
   const $ = (id) => document.getElementById(id);
+
+  document.querySelectorAll(".hint-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const view = tab.dataset.view;
+      document.querySelectorAll(".hint-tab").forEach((t) => t.classList.toggle("active", t === tab));
+      document.querySelectorAll(".hint-body").forEach((b) => { b.hidden = b.dataset.body !== view; });
+    });
+  });
 
   function parse(url) {
     let u;
@@ -158,6 +190,7 @@
 
   function run() {
     $("error").hidden = true;
+    if (!$("src").value.trim()) { $("output").hidden = true; return; }
     try {
       const parsed = parse($("src").value);
       const override = buildOverride(parsed, $("pageHandle").value, $("templateName").value);
@@ -181,10 +214,7 @@
     toast._t = setTimeout(() => t.classList.remove("show"), 1200);
   }
 
-  $("build").addEventListener("click", run);
-  $("src").addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run();
-  });
+  $("src").addEventListener("input", run);
   $("src").addEventListener("paste", () => setTimeout(run, 0));
 
   $("paste").addEventListener("click", async () => {
